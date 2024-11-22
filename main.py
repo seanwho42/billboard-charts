@@ -22,9 +22,9 @@ def get_songs_lyrics():
     })
     for y in range(2018,2023):
         for m in range(1,13):
-            top_10 = get_top_month(m, y)
+            top_30 = get_top_month(m, y)
             rank = 1
-            for song in top_10:
+            for song in top_30:
                 print(f'{song.title} in {m}-{y} by {song.artist} at number {rank}')
                 # need a while loop here to try until get_lyrics actually works because it was timing out a lot
                 while True:
@@ -49,7 +49,7 @@ def get_songs_lyrics():
 
 def get_top_month(m, y):
     '''
-    Gets the top 10 songs from the month
+    Gets the top 30 songs from the month
         m: month # as an integer
         y: year # as an integer
         return: list of top ten from billboard 100 in given month and year as billboard.py song objects
@@ -57,8 +57,8 @@ def get_top_month(m, y):
     # need to add arbitrary 01 to the end to have a date in YYYY-MM-DD format for ChartData()
     billboard_date='{year}-{month:0{width}}-01'.format(year=y, month=m, width=2)
     chart = billboard.ChartData('hot-100', date=billboard_date)
-    top_ten = chart[0:10]
-    return top_ten
+    top_thirty = chart[0:30]
+    return top_thirty
 
 def get_lyrics(title, artist):
     '''
@@ -82,11 +82,12 @@ def clean_lyrics(rough_lyrics):
     # cutting out the ContributorTranslator gibberish
     no_contributor_lyrics = re.sub("^\d+.*\[", "[", no_embed_lyrics)
     # cutting out the weird partial image closing tag thing (this happens only 8 times as of writing this code)
-    # no_i_tag_lyrics = re.sub("/i>", "", no_contributor_lyrics)
+    no_i_tag_lyrics = re.sub("/i>", "", no_contributor_lyrics)
+    cut_out_bracket_labels = re.sub("^\[.*]$", "", no_i_tag_lyrics)
 
     # in case more things need to be cut out in the future
     # cleaned_lyrics = no_i_tag_lyrics
-    cleaned_lyrics = no_contributor_lyrics
+    cleaned_lyrics = cut_out_bracket_labels
     # print(cleaned_lyrics)
     return cleaned_lyrics
 
