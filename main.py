@@ -26,10 +26,23 @@ def get_songs_lyrics():
             rank = 1
             for song in top_30:
                 print(f'{song.title} in {m}-{y} by {song.artist} at number {rank}')
+
+                # todo: parse out all artists included when the songs have collaborators
+                parsed_artist_name = parse_artist()
+                print(f'parsed_artist_name = {parsed_artist_name}')
+
                 # need a while loop here to try until get_lyrics actually works because it was timing out a lot
+                lyrics = get_lyrics(song.title, song.artist)
+                print(lyrics)
+                search_tries = 0
                 while True:
+                    print(f'searching for lyrics')
                     try:
-                        lyrics = get_lyrics(song.title, song.artist)
+                        search_tries += 1
+                        if search_tries > 15:
+                            lyrics = 'Lyrics not found -- timed out'
+                            break
+                        lyrics = get_lyrics(song.title, song.artist.name)
                         break
                     except:
                         pass
@@ -44,8 +57,23 @@ def get_songs_lyrics():
                     'lyrics':cleaned_lyrics
                 }, ignore_index=True)
                 rank += 1
-    songs_lyrics.to_csv('songs-lyrics.csv', index=False)
+                songs_lyrics.to_csv('songs-lyrics.csv', index=False)
 
+def parse_artist(billboard_artist_name):
+    '''
+    Parses the artist names if multiple are listed
+        billboard_artist_name: artist name returned by billboard.py song.artist
+        return: the first artist name as string
+        # todo: see about including collaborators to ensure we find the right songs
+    '''
+    # so billboard.py separates multiple artists with "Featuring"
+    # now lets just delete everything that isn't the first artist....
+    first_artist = re.sub(' Featuring.*', '', billboard_artist_name)
+
+    # adding this in for silk sonic
+    first_artist = re.sub(' \(Bruno Mars & Anderson .Paak\)', '', first_artist)
+
+    return first_artist
 
 def get_top_month(m, y):
     '''
@@ -60,22 +88,28 @@ def get_top_month(m, y):
     top_thirty = chart[0:30]
     return top_thirty
 
-def get_lyrics(title, artist):
+def get_lyrics(title, artist_name):
     '''
-    Gets lyrics from genius and returns them givne artist and song title
+    Gets lyrics from genius and returns them given artist and song title
         title: song title as string
         artist: artist as string
         return: lyrics as string
     '''
-    song = genius.search_song(title=title, artist=artist)
-    lyrics = song.lyrics
+    # todo: figure out if there is a way to search for someone as a collaborator
+    # song = genius.search_song(title=title, artist=artist)
+
+    # trying search by artist?
+    # lyrics = song.lyrics
+    artist = genius.search_artist(search_term=f'{artist_name}')
+    songs = artist.get_songs(sort='popularity')
+    # if statement to match song title looping through each of the songs?
+    # might run into issues with song titles having parentheses i.e. the amazing spiderman version of sunflower
+
     return lyrics
 
 def clean_lyrics(rough_lyrics):
     # there are a few slip ups with the lyricsgenius library WRT web scarping...
     # this attempts to clean those up using regex
-    # note -- manually removed 8 "/i>" issues because it was such a small issue it was easier
-    # to do by hand and make sure it didn't screw anything else up
 
     # cutting out the numberEmbed thing
     no_embed_lyrics = re.sub("\d*Embed", "", rough_lyrics)
@@ -83,6 +117,7 @@ def clean_lyrics(rough_lyrics):
     no_contributor_lyrics = re.sub("^\d+.*\[", "[", no_embed_lyrics)
     # cutting out the weird partial image closing tag thing (this happens only 8 times as of writing this code)
     no_i_tag_lyrics = re.sub("/i>", "", no_contributor_lyrics)
+    # no more bracket label things over the verses
     cut_out_bracket_labels = re.sub("^\[.*]$", "", no_i_tag_lyrics)
 
     # in case more things need to be cut out in the future
