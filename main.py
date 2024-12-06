@@ -3,10 +3,11 @@ from lyricsgenius import Genius
 import pandas as pd
 import re
 
-
+# really should make this an env variable but its free so I trust you with my token nathan
 token = '0mpgH1IG8C2h8Yoik-R-bS-OuSNvzMKaOeJ_9spWaUXFeGHvacfrICRFbLgLqrbU'
-genius = Genius(token)
+genius = Genius(token, skip_non_songs=True, timeout=20, retries=10)
 
+max_tries = 20
 
 def get_songs_lyrics():
     '''
@@ -28,25 +29,11 @@ def get_songs_lyrics():
                 print(f'{song.title} in {m}-{y} by {song.artist} at number {rank}')
 
                 # todo: parse out all artists included when the songs have collaborators
-                parsed_artist_name = parse_artist()
-                print(f'parsed_artist_name = {parsed_artist_name}')
+                first_artist, all_artists = parse_artist(song.artist)
+                print(f'first_artist = {first_artist}, all_artists = {all_artists}')
 
                 # need a while loop here to try until get_lyrics actually works because it was timing out a lot
-                lyrics = get_lyrics(song.title, song.artist)
-                print(lyrics)
-                search_tries = 0
-                while True:
-                    print(f'searching for lyrics')
-                    try:
-                        search_tries += 1
-                        if search_tries > 15:
-                            lyrics = 'Lyrics not found -- timed out'
-                            break
-                        lyrics = get_lyrics(song.title, song.artist.name)
-                        break
-                    except:
-                        pass
-                # need to remove XXXEmbed -- though it could be as low as XEmbed where X is any given int
+                lyrics = get_lyrics(song.title, first_artist, all_artists)
                 cleaned_lyrics = clean_lyrics(lyrics)
                 songs_lyrics = songs_lyrics._append({
                     'year':y,
@@ -70,10 +57,12 @@ def parse_artist(billboard_artist_name):
     # now lets just delete everything that isn't the first artist....
     first_artist = re.sub(' Featuring.*', '', billboard_artist_name)
 
+    second_artist = re.sub('.*Featuring ', '', billboard_artist_name)
+
     # adding this in for silk sonic
     first_artist = re.sub(' \(Bruno Mars & Anderson .Paak\)', '', first_artist)
 
-    return first_artist
+    return first_artist, second_artist
 
 def get_top_month(m, y):
     '''
@@ -88,7 +77,7 @@ def get_top_month(m, y):
     top_thirty = chart[0:30]
     return top_thirty
 
-def get_lyrics(title, artist_name):
+def get_lyrics(title, first_artist, second_artist):
     '''
     Gets lyrics from genius and returns them given artist and song title
         title: song title as string
@@ -100,11 +89,37 @@ def get_lyrics(title, artist_name):
 
     # trying search by artist?
     # lyrics = song.lyrics
-    artist = genius.search_artist(search_term=f'{artist_name}')
-    songs = artist.get_songs(sort='popularity')
-    # if statement to match song title looping through each of the songs?
-    # might run into issues with song titles having parentheses i.e. the amazing spiderman version of sunflower
+    try:
+        # dumb thing thinks I want it to gather all of the songs which takes a million years, so we set max to 0
+        artist = genius.search_artist(artist_name=f'{first_artist}', max_songs=0)
+        print(f'Found artist: {artist.name}')
+        print(f'artist id: {artist.id}')
+    except:
+        lyrics = f'Lyrics not found -- no artist found searching for artist_name {first_artist}'
+        return lyrics
 
+    print(artist)
+    # need to pull the actual songs from the dictionary
+    songs = genius.search_artist_songs(artist_id=artist.id, search_term=title, sort='popularity')['songs']
+    for song in songs:
+        song_artists = song['artist_names']
+        print(song_artists)
+        # todo: fuzzy match instead??
+        if (second_artist in song_artists) and (first_artist in song_artists):
+            print(f'song_artists "{song_artists}" matches first_artist "{first_artist}" and second_artist "{second_artist}"')
+            lyrics = genius.lyrics(song_url=song['url'])
+            return lyrics
+
+    # going back through if there wasn't a match on both
+    for song in songs:
+        song_artists = song['artist_names']
+        print(song_artists)
+        if first_artist in song_artists:
+            print(f'unable to match off of all_artists, matched off of first_artist "{first_artist}"')
+            lyrics = genius.lyrics(song_url=song['url'])
+            return lyrics
+
+    lyrics = f'Lyrics not found -- no songs matched {title} by {second_artist} in {first_artist} discology'
     return lyrics
 
 def clean_lyrics(rough_lyrics):
@@ -118,8 +133,7 @@ def clean_lyrics(rough_lyrics):
     # cutting out the weird partial image closing tag thing (this happens only 8 times as of writing this code)
     no_i_tag_lyrics = re.sub("/i>", "", no_contributor_lyrics)
     # no more bracket label things over the verses
-    cut_out_bracket_labels = re.sub("^\[.*]$", "", no_i_tag_lyrics)
-
+    cut_out_bracket_labels = re.sub("\[.*]", "", no_i_tag_lyrics)
     # in case more things need to be cut out in the future
     # cleaned_lyrics = no_i_tag_lyrics
     cleaned_lyrics = cut_out_bracket_labels

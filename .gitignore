@@ -7630,3 +7630,5 @@ venv/pyvenv.cfg
 venv/pyvenv.cfg
 nathan-billboard.numbers
 nathan-billboard copy.numbers
+*.py
+test-regex.py
