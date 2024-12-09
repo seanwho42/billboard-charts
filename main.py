@@ -14,12 +14,12 @@ def get_songs_lyrics():
     main function... currently prints out the song info as we see it
     '''
     songs_lyrics = pd.DataFrame({
-        'year':[],
-        'month':[],
-        'title':[],
-        'artist':[],
+        'year': [],
+        'month': [],
+        'title': [],
+        'artist': [],
         'rank': [],
-        'lyrics':[]
+        'lyrics': []
     })
     for y in range(2018,2023):
         for m in range(1,13):
@@ -55,12 +55,22 @@ def parse_artist(billboard_artist_name):
     '''
     # so billboard.py separates multiple artists with "Featuring"
     # now lets just delete everything that isn't the first artist....
-    first_artist = re.sub(' Featuring.*', '', billboard_artist_name)
-
-    second_artist = re.sub('.*Featuring ', '', billboard_artist_name)
 
     # adding this in for silk sonic
-    first_artist = re.sub(' \(Bruno Mars & Anderson .Paak\)', '', first_artist)
+    billboard_artist_name = re.sub(' \(Bruno Mars & Anderson .Paak\)', '', billboard_artist_name)
+    # adding this in to protect lil nas x from regex.. could do it in the regex itself but this works fine
+    billboard_artist_name = re.sub('Lil Nas X', 'Lil NasX', billboard_artist_name)
+
+
+    first_artist = re.sub(' Featuring.*', '', billboard_artist_name)
+    first_artist = re.sub(' &.*', '', first_artist)
+    first_artist = re.sub(' [Xx].*', '', first_artist)
+    first_artist = re.sub('Lil NasX', 'Lil Nas X', first_artist)
+
+    second_artist = re.sub('.*Featuring ', '', billboard_artist_name)
+    second_artist = re.sub('.*& ', '', second_artist)
+    second_artist = re.sub('.* [xX] ', '', second_artist)
+    second_artist = re.sub('Lil NasX', 'Lil Nas X', second_artist)
 
     return first_artist, second_artist
 
@@ -84,13 +94,9 @@ def get_lyrics(title, first_artist, second_artist):
         artist: artist as string
         return: lyrics as string
     '''
-    # todo: figure out if there is a way to search for someone as a collaborator
-    # song = genius.search_song(title=title, artist=artist)
-
-    # trying search by artist?
-    # lyrics = song.lyrics
+    # sometimes the searching doesn't work so adding this to account for that
     try:
-        # dumb thing thinks I want it to gather all of the songs which takes a million years, so we set max to 0
+        # the api thinks I want it to gather all of the songs which takes a million years, so we set max to 0
         artist = genius.search_artist(artist_name=f'{first_artist}', max_songs=0)
         print(f'Found artist: {artist.name}')
         print(f'artist id: {artist.id}')
@@ -105,12 +111,13 @@ def get_lyrics(title, first_artist, second_artist):
         song_artists = song['artist_names']
         print(song_artists)
         # todo: fuzzy match instead??
+        # match first and last artist names
         if (second_artist in song_artists) and (first_artist in song_artists):
             print(f'song_artists "{song_artists}" matches first_artist "{first_artist}" and second_artist "{second_artist}"')
             lyrics = genius.lyrics(song_url=song['url'])
             return lyrics
 
-    # going back through if there wasn't a match on both
+    # going back through if there wasn't a match on both to just match off of first artist
     for song in songs:
         song_artists = song['artist_names']
         print(song_artists)
